@@ -1,2 +1,2 @@
-# qms-digicon
-Sistema QMS Digicon
+# digicon-qms
+Sistema Digicon QMS
