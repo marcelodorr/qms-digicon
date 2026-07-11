@@ -1,0 +1,113 @@
+Pacote de atualizacao Digicon QMS
+=================================
+
+Conteudo
+--------
+- backend: publicacao Release do backend .NET 8.
+- frontend: build estatico do frontend.
+- sql: scripts de criacao/atualizacao de tabelas.
+- scripts/update-digicon-qms.ps1: copia os arquivos no servidor, faz backup e reinicia o servico.
+- scripts/apply-sql-updates.ps1: opcional, aplica scripts SQL usando sqlcmd.
+
+Antes de atualizar
+------------------
+1. Identifique no servidor do cliente:
+   - nome do servico Windows do sistema;
+   - pasta atual do backend;
+   - pasta onde o frontend e publicado, caso exista;
+   - dados do SQL Server usados no appsettings.json.
+2. Faca backup do banco SQL Server.
+3. Faca backup da pasta atual do sistema, mesmo que o script tambem crie backup.
+4. Confirme que a porta do ambiente esta liberada no firewall do servidor para acesso pela rede.
+   - QA: http://gd5134:5081/
+   - PD: http://gd5134:5082/
+5. Confirme que o .NET 8 Runtime/Hosting Bundle esta instalado no servidor.
+
+Atualizacao padrao no servidor
+------------------------------
+Abra PowerShell como Administrador dentro da pasta deste pacote e execute:
+
+.\scripts\update-digicon-qms.ps1 -ServiceName "NOME_DO_SERVICO" -BackendPath "C:\CAMINHO\DO\BACKEND"
+
+Se tambem quiser atualizar o frontend publicado em uma pasta do servidor:
+
+.\scripts\update-digicon-qms.ps1 -ServiceName "NOME_DO_SERVICO" -BackendPath "C:\CAMINHO\DO\BACKEND" -FrontendPath "C:\CAMINHO\DO\FRONTEND"
+
+O script preserva estes arquivos do backend do cliente:
+- appsettings.json
+- appsettings.Development.json
+
+Isso evita sobrescrever a conexao do banco, SMTP e caminhos locais do cliente.
+
+Servico Windows
+---------------
+Esta versao foi publicada com suporte nativo a Windows Service.
+O servico deve apontar para:
+
+C:\CAMINHO\DO\BACKEND\backend.exe
+
+Se o servico tiver sido criado apontando para backend.dll ou para uma pasta antiga, remova e recrie:
+
+sc.exe delete DigiconQMS
+sc.exe create DigiconQMS binPath= "C:\CAMINHO\DO\BACKEND\backend.exe" start= auto
+sc.exe start DigiconQMS
+
+Se ocorrer erro ao iniciar, teste primeiro pelo console no servidor:
+
+cd C:\CAMINHO\DO\BACKEND
+.\backend.exe
+
+Depois acesse o Swagger do ambiente correspondente:
+
+QA:
+http://gd5134:5081/swagger
+
+PD:
+http://gd5134:5082/swagger
+
+Esta versao tambem grava falhas de inicializacao em:
+
+C:\CAMINHO\DO\BACKEND\startup-error.log
+
+Para diagnosticar automaticamente:
+
+.\scripts\diagnosticar-servico.ps1 -ServiceName "DigiconQMS" -BackendPath "C:\CAMINHO\DO\BACKEND"
+
+SQL
+---
+Os scripts em sql devem ser aplicados apenas quando a versao do cliente ainda nao tem essas tabelas/colunas.
+O script full-schema.sql nao e aplicado por padrao.
+
+Exemplo com autenticacao Windows:
+
+.\scripts\apply-sql-updates.ps1 -ServerInstance "SERVIDOR\INSTANCIA" -Database "DCA_ncssp4"
+
+Exemplo com usuario SQL:
+
+.\scripts\apply-sql-updates.ps1 -ServerInstance "SERVIDOR\INSTANCIA" -Database "DCA_ncssp4" -Username "sa" -Password "SENHA"
+
+Acesso pela rede
+----------------
+O sistema roda como servico self-contained e o proprio backend entrega o frontend
+na raiz do sistema.
+
+Ambientes do cliente:
+- QA: http://gd5134:5081/
+- PD: http://gd5134:5082/
+
+O frontend detecta automaticamente o endereco usado no navegador e aponta a API
+para o mesmo host e porta.
+
+Exemplos:
+- Acesso em http://gd5134:5081/ chama a API em http://gd5134:5081/api/...
+- Acesso em http://gd5134:5082/ chama a API em http://gd5134:5082/api/...
+
+Se o frontend for publicado separadamente em outro endereco, compile novamente
+usando VITE_API_URL com a URL desejada da API.
+
+Credencial master
+-----------------
+Usuario: admin
+Senha: admin123
+
+Observacao: o admin master consegue autenticar mesmo se o SQL estiver fora, mas as telas que consultam dados dependem do SQL Server estar acessivel.
