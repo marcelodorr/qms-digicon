@@ -36,6 +36,8 @@ public sealed class ProductionOrder : BaseEntity
     public string ProductName { get; set; } = string.Empty;
     public int TargetQuantity { get; set; }
     public string Revision { get; set; } = string.Empty;
+    public DateTime PlannedDate { get; set; }
+    public string Sector { get; set; } = string.Empty;
 }
 
 public sealed class Operation : BaseEntity
@@ -46,6 +48,7 @@ public sealed class Operation : BaseEntity
     public string Code { get; set; } = string.Empty;
     public string PartNumber { get; set; } = string.Empty;
     public string Revision { get; set; } = string.Empty;
+    public string Sector { get; set; } = string.Empty;
 }
 
 public sealed class Defect : BaseEntity { public string Code { get; set; } = string.Empty; public string Description { get; set; } = string.Empty; }

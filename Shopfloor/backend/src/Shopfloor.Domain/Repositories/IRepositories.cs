@@ -12,7 +12,7 @@ public interface IMachineRepository : IBaseRepository<Machine>
 {
     Task<IReadOnlyCollection<Machine>> ListAvailableAsync(CancellationToken ct);
 }
-public interface IProductionOrderRepository : IBaseRepository<ProductionOrder> { Task<IReadOnlyCollection<ProductionOrder>> ListByMachineAsync(Guid machineId, CancellationToken ct); }
+public interface IProductionOrderRepository : IBaseRepository<ProductionOrder> { Task<IReadOnlyCollection<ProductionOrder>> ListByMachineAsync(Guid machineId, DateOnly plannedDate, string? search, CancellationToken ct); }
 public interface IOperationRepository : IBaseRepository<Operation> { Task<IReadOnlyCollection<Operation>> ListByProductionOrderAsync(Guid productionOrderId, CancellationToken ct); }
 public interface IDefectRepository : IBaseRepository<Defect> { Task<Defect?> FindByCodeAsync(string code, CancellationToken ct); Task<IReadOnlyCollection<Defect>> ListAvailableAsync(CancellationToken ct); }
 public interface ICauseRepository : IBaseRepository<Cause> { Task<Cause?> FindByCodeAsync(string code, CancellationToken ct); Task<IReadOnlyCollection<Cause>> ListAvailableAsync(CancellationToken ct); }

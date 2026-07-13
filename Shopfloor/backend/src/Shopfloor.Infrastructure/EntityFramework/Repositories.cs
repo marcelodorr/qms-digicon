@@ -125,19 +125,40 @@ public sealed class MachineRepository(ShopfloorDbContext c, string machinesConne
 }
 public sealed class ProductionOrderRepository(ShopfloorDbContext c, string connectionString) : BaseRepository<ProductionOrder>(c), IProductionOrderRepository
 {
-    public async Task<IReadOnlyCollection<ProductionOrder>> ListByMachineAsync(Guid machineId, CancellationToken ct)
+    public async Task<IReadOnlyCollection<ProductionOrder>> ListByMachineAsync(Guid machineId, DateOnly plannedDate, string? search, CancellationToken ct)
     {
-        var source = new List<(string Code, string PartNumber, int Quantity, string Revision)>();
+        var machine = await Context.Machines.FirstOrDefaultAsync(x => x.Id == machineId, ct)
+            ?? throw new InvalidOperationException("Máquina não sincronizada.");
+        var source = new List<(string Code, string PartNumber, int Quantity, string Revision, DateTime PlannedDate, string Sector)>();
         await using var connection = new SqlConnection(connectionString); await connection.OpenAsync(ct);
-        const string sql = """SELECT IndProd1, MAX(IndProd3), MAX(PlanQty), MAX(RevProcesso) FROM Production WHERE Inativo = 'N' AND IndProd1 IS NOT NULL GROUP BY IndProd1 ORDER BY IndProd1""";
-        await using var command = new SqlCommand(sql, connection); await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) source.Add((Text(reader,0), Text(reader,1), reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2)), Text(reader,3)));
+        const string sql = """
+            WITH RankedProduction AS (
+                SELECT IndProd1, IndProd3, PlanQty, RevProcesso, DateTimeUp, PlanCodeMach,
+                       ROW_NUMBER() OVER (PARTITION BY IndProd1 ORDER BY DateTimeUp DESC) AS RowNumber
+                FROM Production
+                WHERE Inativo = 'N'
+                  AND DateTimeUp IS NOT NULL
+                  AND CONVERT(date, DateTimeUp) = @PlannedDate
+                  AND PlanCodeMach = @Sector
+                  AND (@Search = '' OR IndProd1 LIKE '%' + @Search + '%')
+            )
+            SELECT IndProd1, IndProd3, PlanQty, RevProcesso, DateTimeUp, PlanCodeMach
+            FROM RankedProduction
+            WHERE RowNumber = 1
+            ORDER BY DateTimeUp DESC
+            """;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@PlannedDate", plannedDate.ToDateTime(TimeOnly.MinValue));
+        command.Parameters.AddWithValue("@Sector", machine.Sector);
+        command.Parameters.AddWithValue("@Search", search?.Trim() ?? string.Empty);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) source.Add((Text(reader,0), Text(reader,1), reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2)), Text(reader,3), reader.GetDateTime(4), Text(reader,5)));
         var codes = source.Select(x => x.Code).ToArray();
         var locals = await Context.ProductionOrders.Where(x => codes.Contains(x.Code)).ToDictionaryAsync(x => x.Code, ct);
         var result = new List<ProductionOrder>();
         foreach (var item in source.Where(x => x.Code.Length > 0)) {
             if (!locals.TryGetValue(item.Code, out var entity)) { entity = new ProductionOrder { Id=StableId("production", item.Code), Code=item.Code }; Context.Add(entity); locals[item.Code]=entity; }
-            entity.MachineId=machineId; entity.ProductName=item.PartNumber; entity.TargetQuantity=item.Quantity; entity.Revision=item.Revision; result.Add(entity);
+            entity.MachineId=machineId; entity.ProductName=item.PartNumber; entity.TargetQuantity=item.Quantity; entity.Revision=item.Revision; entity.PlannedDate=item.PlannedDate; entity.Sector=item.Sector; result.Add(entity);
         }
         return result;
     }
@@ -149,14 +170,26 @@ public sealed class OperationRepository(ShopfloorDbContext c, string connectionS
     public async Task<IReadOnlyCollection<Operation>> ListByProductionOrderAsync(Guid productionOrderId, CancellationToken ct)
     {
         var order = await Context.ProductionOrders.FirstOrDefaultAsync(x => x.Id == productionOrderId, ct) ?? throw new InvalidOperationException("Ordem de produção não sincronizada.");
-        var source = new List<(string Code,string Name,string PartNumber,string Revision)>();
+        var machine = await Context.Machines.FirstOrDefaultAsync(x => x.Id == order.MachineId, ct) ?? throw new InvalidOperationException("Máquina da ordem não sincronizada.");
+        var source = new List<(string Code,string Name,string PartNumber,string Revision,string Sector)>();
         await using var connection = new SqlConnection(connectionString); await connection.OpenAsync(ct);
-        const string sql = """SELECT DISTINCT IndProd2, DataAux2, IndProd3, RevProcesso FROM Production WHERE Inativo = 'N' AND IndProd1 = @ProductionOrder ORDER BY IndProd2""";
+        const string sql = """
+            WITH RankedOperations AS (
+                SELECT IndProd2, DataAux2, IndProd3, RevProcesso, DateTimeUp, PlanCodeMach,
+                       ROW_NUMBER() OVER (PARTITION BY IndProd2 ORDER BY DateTimeUp DESC) AS RowNumber
+                FROM Production
+                WHERE Inativo = 'N' AND DateTimeUp IS NOT NULL AND IndProd1 = @ProductionOrder AND PlanCodeMach = @Sector
+            )
+            SELECT IndProd2, DataAux2, IndProd3, RevProcesso, PlanCodeMach
+            FROM RankedOperations WHERE RowNumber = 1
+            ORDER BY DateTimeUp DESC
+            """;
         await using var command = new SqlCommand(sql, connection); command.Parameters.AddWithValue("@ProductionOrder", order.Code);
+        command.Parameters.AddWithValue("@Sector", machine.Sector);
         await using var reader = await command.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) source.Add((Text(reader,0),Text(reader,1),Text(reader,2),Text(reader,3)));
+        while (await reader.ReadAsync(ct)) source.Add((Text(reader,0),Text(reader,1),Text(reader,2),Text(reader,3),Text(reader,4)));
         var codes=source.Select(x=>x.Code).ToArray(); var locals=await Context.Operations.Where(x=>x.ProductionOrderId==productionOrderId && codes.Contains(x.Code)).ToDictionaryAsync(x=>x.Code,ct);
-        var result=new List<Operation>(); foreach(var item in source.Where(x=>x.Code.Length>0)) { if(!locals.TryGetValue(item.Code,out var entity)){entity=new Operation{Id=StableId(order.Code,item.Code),ProductionOrderId=productionOrderId,Code=item.Code};Context.Add(entity);locals[item.Code]=entity;} entity.Name=string.IsNullOrWhiteSpace(item.Name)?item.Code:item.Name;entity.PartNumber=item.PartNumber;entity.Revision=item.Revision;result.Add(entity); } return result;
+        var result=new List<Operation>(); foreach(var item in source.Where(x=>x.Code.Length>0)) { if(!locals.TryGetValue(item.Code,out var entity)){entity=new Operation{Id=StableId(order.Code,item.Code),ProductionOrderId=productionOrderId,Code=item.Code};Context.Add(entity);locals[item.Code]=entity;} entity.Name=string.IsNullOrWhiteSpace(item.Name)?item.Code:item.Name;entity.PartNumber=item.PartNumber;entity.Revision=item.Revision;entity.Sector=item.Sector;result.Add(entity); } return result;
     }
     private static string Text(SqlDataReader r,int i) => r.IsDBNull(i)?string.Empty:Convert.ToString(r.GetValue(i))?.Trim()??string.Empty;
     private static Guid StableId(string order,string operation) => new(SHA256.HashData(Encoding.UTF8.GetBytes($"operation:{order}:{operation}"))[..16]);

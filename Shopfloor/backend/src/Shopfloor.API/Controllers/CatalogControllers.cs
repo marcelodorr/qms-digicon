@@ -12,7 +12,7 @@ public sealed class MachinesController(IMediator mediator) : ControllerBase
 
 [ApiController, Authorize, Route("api/production-orders")]
 public sealed class ProductionOrdersController(IMediator mediator) : ControllerBase
-{ [HttpGet] public Task<IReadOnlyCollection<ProductionOrderDto>> List([FromQuery] Guid machineId, CancellationToken ct) => mediator.Send(new ListProductionOrdersQuery(machineId), ct); }
+{ [HttpGet] public Task<IReadOnlyCollection<ProductionOrderDto>> List([FromQuery] Guid machineId, [FromQuery] DateOnly? plannedDate, [FromQuery] string? search, CancellationToken ct) => mediator.Send(new ListProductionOrdersQuery(machineId, plannedDate ?? DateOnly.FromDateTime(DateTime.Today), search), ct); }
 
 [ApiController, Authorize, Route("api/operations")]
 public sealed class OperationsController(IMediator mediator) : ControllerBase

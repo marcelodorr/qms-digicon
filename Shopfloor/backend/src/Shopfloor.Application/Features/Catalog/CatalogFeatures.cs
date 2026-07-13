@@ -7,7 +7,7 @@ using Shopfloor.Domain.Repositories;
 namespace Shopfloor.Application.Features.Catalog;
 
 public sealed record ListMachinesQuery : IRequest<IReadOnlyCollection<MachineDto>>;
-public sealed record ListProductionOrdersQuery(Guid MachineId) : IRequest<IReadOnlyCollection<ProductionOrderDto>>;
+public sealed record ListProductionOrdersQuery(Guid MachineId, DateOnly PlannedDate, string? Search) : IRequest<IReadOnlyCollection<ProductionOrderDto>>;
 public sealed record ListOperationsQuery(Guid ProductionOrderId) : IRequest<IReadOnlyCollection<OperationDto>>;
 public sealed record ListDefectsQuery : IRequest<IReadOnlyCollection<DefectDto>>;
 public sealed record ListCausesQuery : IRequest<IReadOnlyCollection<CauseDto>>;
@@ -23,7 +23,7 @@ public sealed class ListMachinesHandler(IMachineRepository repository, IUnitOfWo
     }
 }
 public sealed class ListProductionOrdersHandler(IProductionOrderRepository repository, IUnitOfWork unitOfWork, IMapper mapper) : IRequestHandler<ListProductionOrdersQuery, IReadOnlyCollection<ProductionOrderDto>>
-{ public async Task<IReadOnlyCollection<ProductionOrderDto>> Handle(ListProductionOrdersQuery q, CancellationToken ct) { var items=await repository.ListByMachineAsync(q.MachineId,ct);await unitOfWork.SaveChangesAsync(ct);return mapper.Map<IReadOnlyCollection<ProductionOrderDto>>(items); } }
+{ public async Task<IReadOnlyCollection<ProductionOrderDto>> Handle(ListProductionOrdersQuery q, CancellationToken ct) { var items=await repository.ListByMachineAsync(q.MachineId,q.PlannedDate,q.Search,ct);await unitOfWork.SaveChangesAsync(ct);return mapper.Map<IReadOnlyCollection<ProductionOrderDto>>(items); } }
 public sealed class ListOperationsHandler(IOperationRepository repository, IUnitOfWork unitOfWork, IMapper mapper) : IRequestHandler<ListOperationsQuery, IReadOnlyCollection<OperationDto>>
 { public async Task<IReadOnlyCollection<OperationDto>> Handle(ListOperationsQuery q, CancellationToken ct) { var items=await repository.ListByProductionOrderAsync(q.ProductionOrderId,ct);await unitOfWork.SaveChangesAsync(ct);return mapper.Map<IReadOnlyCollection<OperationDto>>(items); } }
 public sealed class ListDefectsHandler(IDefectRepository repository, IUnitOfWork unitOfWork, IMapper mapper) : IRequestHandler<ListDefectsQuery, IReadOnlyCollection<DefectDto>>
