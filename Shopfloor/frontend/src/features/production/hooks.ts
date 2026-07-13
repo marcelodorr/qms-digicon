@@ -1,0 +1,5 @@
+import { useEffect,useState } from 'react';
+import { productionApi } from './api';
+import type { OperationDto,ProductionOrderDto } from './types';
+export function useProductionOrders(machineId:string){const [items,setItems]=useState<ProductionOrderDto[]>([]);const [isLoading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);useEffect(()=>{setLoading(true);productionApi.listOrders(machineId).then(setItems).catch(e=>setError(e instanceof Error?e.message:'Falha ao carregar ordens.')).finally(()=>setLoading(false));},[machineId]);return{items,isLoading,error};}
+export function useOperations(productionOrderId:string){const [items,setItems]=useState<OperationDto[]>([]);const [isLoading,setLoading]=useState(true);const [error,setError]=useState<string|null>(null);useEffect(()=>{setLoading(true);productionApi.listOperations(productionOrderId).then(setItems).catch(e=>setError(e instanceof Error?e.message:'Falha ao carregar operações.')).finally(()=>setLoading(false));},[productionOrderId]);return{items,isLoading,error};}
