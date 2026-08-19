@@ -9423,11 +9423,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/Users/user/Documents/GitHub/digicon-qms/BackOffice/backend/backend.csproj",
+      "projectUniqueName": "/Users/user/Documents/GitHub/qms-digicon-saas/qms-digicon/BackOffice/backend/backend.csproj",
       "projectName": "backend",
-      "projectPath": "/Users/user/Documents/GitHub/digicon-qms/BackOffice/backend/backend.csproj",
+      "projectPath": "/Users/user/Documents/GitHub/qms-digicon-saas/qms-digicon/BackOffice/backend/backend.csproj",
       "packagesPath": "/Users/user/.nuget/packages/",
-      "outputPath": "/Users/user/Documents/GitHub/digicon-qms/BackOffice/backend/obj/",
+      "outputPath": "/Users/user/Documents/GitHub/qms-digicon-saas/qms-digicon/BackOffice/backend/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/Users/user/.nuget/NuGet/NuGet.Config"
