@@ -2,6 +2,7 @@ import { requestJson } from "./api";
 
 export type DbConnectionConfig = {
   server?: string;
+  port?: number;
   database?: string;
   user?: string;
   password?: string;
@@ -18,6 +19,7 @@ export async function updateDbConfig(payload: DbConnectionConfig): Promise<DbCon
     method: "PUT",
     body: JSON.stringify({
       server: payload.server,
+      port: payload.port,
       database: payload.database,
       user: payload.user,
       password: payload.password,

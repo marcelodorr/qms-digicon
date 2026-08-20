@@ -1,0 +1,15 @@
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+
+BackOffice/backend/bin/
+BackOffice/backend/obj/
+BackOffice/backend/.config/
+
+BackOffice/frontend/node_modules/
+BackOffice/frontend/dist/
+
+release/
+Documents/
+fullstack-guide.md

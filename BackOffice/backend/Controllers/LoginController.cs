@@ -3,7 +3,8 @@ using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
+using Npgsql;
+using NpgsqlTypes;
 using System.Data;
 using System.Globalization;
 using System.Linq;
@@ -25,7 +26,7 @@ namespace backend.Controllers
             _configuration = configuration;
         }
 
-        private SqlConnection CreateConnection()
+        private NpgsqlConnection CreateConnection()
         {
             var connectionString = _configuration.GetConnectionString("DefaultConnection");
             if (string.IsNullOrWhiteSpace(connectionString))
@@ -33,7 +34,7 @@ namespace backend.Controllers
                 throw new InvalidOperationException("Configuração de conexão ausente.");
             }
 
-            return new SqlConnection(connectionString);
+            return new NpgsqlConnection(connectionString);
         }
 
         [HttpGet("users")]
@@ -52,7 +53,7 @@ namespace backend.Controllers
                     ORDER BY Username
                 ";
 
-                using var command = new SqlCommand(sql, connection);
+                using var command = new NpgsqlCommand(sql, connection);
                 using var reader = await command.ExecuteReaderAsync();
 
                 var users = new List<object>();
@@ -106,37 +107,13 @@ namespace backend.Controllers
                 using var connection = CreateConnection();
                 await connection.OpenAsync();
 
-                if (identifier.Equals("admin", StringComparison.OrdinalIgnoreCase) && password == "admin123")
-                {
-                    var session = await CreateSessionAsync(connection, "admin", "admin@local");
-                    return Ok(new
-                    {
-                        success = true,
-                        user = new
-                        {
-                            id = "admin",
-                            fullName = "Administrador",
-                            username = "admin",
-                            email = "admin@local",
-                            type = "Admin",
-                            image = (string?)null
-                        },
-                        session = new
-                        {
-                            id = session.sessionId,
-                            createdAt = session.createdAt,
-                            lastSeen = session.lastSeen
-                        }
-                    });
-                }
-
                 const string sql = @"
                     SELECT Username, Email, Password, Salt, Type, Image
                     FROM login_certification
                     WHERE LOWER(Username) = @Identifier OR LOWER(Email) = @Identifier
                 ";
 
-                using var command = new SqlCommand(sql, connection);
+                using var command = new NpgsqlCommand(sql, connection);
                 command.Parameters.AddWithValue("@Identifier", identifier.ToLowerInvariant());
 
                 string? username = null;
@@ -226,11 +203,11 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username OR LOWER(Email) = @Email
                 ";
 
-                using (var checkCommand = new SqlCommand(checkSql, connection))
+                using (var checkCommand = new NpgsqlCommand(checkSql, connection))
                 {
                     checkCommand.Parameters.AddWithValue("@Username", username.ToLowerInvariant());
                     checkCommand.Parameters.AddWithValue("@Email", emailNormalized);
-                    var exists = (int)await checkCommand.ExecuteScalarAsync();
+                    var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                     if (exists > 0)
                     {
                         return Conflict(new { message = "Usuário ou email já existente." });
@@ -262,7 +239,7 @@ namespace backend.Controllers
                     VALUES (@Username, @Email, @Password, @Salt, @Type, @Image)
                 ";
 
-                using (var insertCommand = new SqlCommand(insertSql, connection))
+                using (var insertCommand = new NpgsqlCommand(insertSql, connection))
                 {
                     insertCommand.Parameters.AddWithValue("@Username", username);
                     insertCommand.Parameters.AddWithValue("@Email", emailNormalized);
@@ -336,12 +313,12 @@ namespace backend.Controllers
                       AND LOWER(Username) <> @CurrentUsername
                 ";
 
-                using (var checkCommand = new SqlCommand(checkSql, connection))
+                using (var checkCommand = new NpgsqlCommand(checkSql, connection))
                 {
                     checkCommand.Parameters.AddWithValue("@NewUsername", newUsername.ToLowerInvariant());
                     checkCommand.Parameters.AddWithValue("@NewEmail", newEmailNormalized);
                     checkCommand.Parameters.AddWithValue("@CurrentUsername", username.ToLowerInvariant());
-                    var exists = (int)await checkCommand.ExecuteScalarAsync();
+                    var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                     if (exists > 0)
                     {
                         return Conflict(new { message = "Usuário ou email já existente." });
@@ -375,7 +352,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @CurrentUsername
                 ";
 
-                using (var updateCommand = new SqlCommand(updateSql, connection))
+                using (var updateCommand = new NpgsqlCommand(updateSql, connection))
                 {
                     updateCommand.Parameters.AddWithValue("@NewUsername", newUsername);
                     updateCommand.Parameters.AddWithValue("@NewEmail", newEmailNormalized);
@@ -397,7 +374,7 @@ namespace backend.Controllers
                         WHERE LOWER(Username) = @CurrentUsername
                     ";
 
-                    using var permissionsCommand = new SqlCommand(updatePermissionsSql, connection);
+                    using var permissionsCommand = new NpgsqlCommand(updatePermissionsSql, connection);
                     permissionsCommand.Parameters.AddWithValue("@NewUsername", newUsername.ToLowerInvariant());
                     permissionsCommand.Parameters.AddWithValue("@CurrentUsername", username.ToLowerInvariant());
                     await permissionsCommand.ExecuteNonQueryAsync();
@@ -437,7 +414,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username
                 ";
 
-                using var command = new SqlCommand(sql, connection);
+                using var command = new NpgsqlCommand(sql, connection);
                 command.Parameters.AddWithValue("@Username", username.ToLowerInvariant());
                 var rows = await command.ExecuteNonQueryAsync();
 
@@ -451,7 +428,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username
                 ";
 
-                using (var permissionsCommand = new SqlCommand(deletePermissionsSql, connection))
+                using (var permissionsCommand = new NpgsqlCommand(deletePermissionsSql, connection))
                 {
                     permissionsCommand.Parameters.AddWithValue("@Username", username.ToLowerInvariant());
                     await permissionsCommand.ExecuteNonQueryAsync();
@@ -486,7 +463,7 @@ namespace backend.Controllers
                     ORDER BY ModuleKey
                 ";
 
-                using var command = new SqlCommand(sql, connection);
+                using var command = new NpgsqlCommand(sql, connection);
                 command.Parameters.AddWithValue("@Username", trimmedUsername.ToLowerInvariant());
                 using var reader = await command.ExecuteReaderAsync();
 
@@ -537,7 +514,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username
                 ";
 
-                using (var deleteCommand = new SqlCommand(deleteSql, connection, transaction))
+                using (var deleteCommand = new NpgsqlCommand(deleteSql, connection, transaction))
                 {
                     deleteCommand.Parameters.AddWithValue("@Username", trimmedUsername.ToLowerInvariant());
                     await deleteCommand.ExecuteNonQueryAsync();
@@ -561,7 +538,7 @@ namespace backend.Controllers
                     var canEdit = permission!.CanEdit;
                     var canView = permission.CanView || canEdit;
 
-                    using var insertCommand = new SqlCommand(insertSql, connection, transaction);
+                    using var insertCommand = new NpgsqlCommand(insertSql, connection, transaction);
                     insertCommand.Parameters.AddWithValue("@Username", trimmedUsername.ToLowerInvariant());
                     insertCommand.Parameters.AddWithValue("@ModuleKey", moduleKey);
                     insertCommand.Parameters.AddWithValue("@CanView", canView);
@@ -600,7 +577,7 @@ namespace backend.Controllers
                        OR (@Email IS NOT NULL AND LOWER(Email) = @Email)
                 ";
 
-                using var command = new SqlCommand(sql, connection);
+                using var command = new NpgsqlCommand(sql, connection);
                 command.Parameters.AddWithValue("@Username", (object?)username?.ToLowerInvariant() ?? DBNull.Value);
                 command.Parameters.AddWithValue("@Email", (object?)email?.ToLowerInvariant() ?? DBNull.Value);
 
@@ -678,7 +655,7 @@ namespace backend.Controllers
                 string currentType;
                 string? currentImage;
 
-                using (var selectCommand = new SqlCommand(selectSql, connection))
+                using (var selectCommand = new NpgsqlCommand(selectSql, connection))
                 {
                     selectCommand.Parameters.AddWithValue("@Username", (object?)lookupUsername?.ToLowerInvariant() ?? DBNull.Value);
                     selectCommand.Parameters.AddWithValue("@Email", (object?)lookupEmail?.ToLowerInvariant() ?? DBNull.Value);
@@ -724,12 +701,12 @@ namespace backend.Controllers
                       AND LOWER(Username) <> @CurrentUsername
                 ";
 
-                using (var checkCommand = new SqlCommand(checkSql, connection))
+                using (var checkCommand = new NpgsqlCommand(checkSql, connection))
                 {
                     checkCommand.Parameters.AddWithValue("@NewUsername", targetUsername.ToLowerInvariant());
                     checkCommand.Parameters.AddWithValue("@NewEmail", (object?)targetEmailNormalized ?? DBNull.Value);
                     checkCommand.Parameters.AddWithValue("@CurrentUsername", currentUsername.ToLowerInvariant());
-                    var exists = (int)await checkCommand.ExecuteScalarAsync();
+                    var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                     if (exists > 0)
                     {
                         return Conflict(new { message = "Usuário ou email já existente." });
@@ -744,7 +721,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @CurrentUsername
                 ";
 
-                using (var updateCommand = new SqlCommand(updateSql, connection))
+                using (var updateCommand = new NpgsqlCommand(updateSql, connection))
                 {
                     updateCommand.Parameters.AddWithValue("@NewUsername", targetUsername);
                     updateCommand.Parameters.AddWithValue("@NewEmail", (object?)targetEmailNormalized ?? DBNull.Value);
@@ -761,7 +738,7 @@ namespace backend.Controllers
                         WHERE LOWER(Username) = @CurrentUsername
                     ";
 
-                    using var permissionsCommand = new SqlCommand(updatePermissionsSql, connection);
+                    using var permissionsCommand = new NpgsqlCommand(updatePermissionsSql, connection);
                     permissionsCommand.Parameters.AddWithValue("@NewUsername", targetUsername.ToLowerInvariant());
                     permissionsCommand.Parameters.AddWithValue("@CurrentUsername", currentUsername.ToLowerInvariant());
                     await permissionsCommand.ExecuteNonQueryAsync();
@@ -909,7 +886,7 @@ namespace backend.Controllers
                 string? username = null;
                 string? email = null;
 
-                using (var command = new SqlCommand(sql, connection))
+                using (var command = new NpgsqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@Identifier", identifier.ToLowerInvariant());
                     using var reader = await command.ExecuteReaderAsync();
@@ -942,7 +919,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username AND UsedAt IS NULL
                 ";
 
-                using (var invalidateCommand = new SqlCommand(invalidateSql, connection))
+                using (var invalidateCommand = new NpgsqlCommand(invalidateSql, connection))
                 {
                     invalidateCommand.Parameters.AddWithValue("@Now", now);
                     invalidateCommand.Parameters.AddWithValue("@Username", username.ToLowerInvariant());
@@ -954,7 +931,7 @@ namespace backend.Controllers
                     VALUES (@TokenHash, @Username, @Email, @CreatedAt, @ExpiresAt)
                 ";
 
-                using (var insertCommand = new SqlCommand(insertSql, connection))
+                using (var insertCommand = new NpgsqlCommand(insertSql, connection))
                 {
                     insertCommand.Parameters.AddWithValue("@TokenHash", tokenHash);
                     insertCommand.Parameters.AddWithValue("@Username", username);
@@ -987,22 +964,23 @@ namespace backend.Controllers
             {
                 using var connection = CreateConnection();
                 await connection.OpenAsync();
-                await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+                await using var transaction = (NpgsqlTransaction)await connection.BeginTransactionAsync();
 
                 var tokenHash = HashToken(request.Token.Trim());
                 var now = DateTime.UtcNow;
 
                 const string selectSql = @"
-                    SELECT TOP 1 Username, Email
+                    SELECT Username, Email
                     FROM login_password_resets
                     WHERE TokenHash = @TokenHash
                       AND UsedAt IS NULL
                       AND ExpiresAt > @Now
+                    LIMIT 1
                 ";
 
                 string? username = null;
 
-                using (var selectCommand = new SqlCommand(selectSql, connection, transaction))
+                using (var selectCommand = new NpgsqlCommand(selectSql, connection, transaction))
                 {
                     selectCommand.Parameters.AddWithValue("@TokenHash", tokenHash);
                     selectCommand.Parameters.AddWithValue("@Now", now);
@@ -1027,7 +1005,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username
                 ";
 
-                using (var updateCommand = new SqlCommand(updateUserSql, connection, transaction))
+                using (var updateCommand = new NpgsqlCommand(updateUserSql, connection, transaction))
                 {
                     updateCommand.Parameters.AddWithValue("@Password", newHash);
                     updateCommand.Parameters.AddWithValue("@Salt", newSalt);
@@ -1041,7 +1019,7 @@ namespace backend.Controllers
                     WHERE TokenHash = @TokenHash
                 ";
 
-                using (var updateResetCommand = new SqlCommand(updateResetSql, connection, transaction))
+                using (var updateResetCommand = new NpgsqlCommand(updateResetSql, connection, transaction))
                 {
                     updateResetCommand.Parameters.AddWithValue("@Now", now);
                     updateResetCommand.Parameters.AddWithValue("@TokenHash", tokenHash);
@@ -1087,7 +1065,7 @@ namespace backend.Controllers
                 string? hash = null;
                 string? salt = null;
 
-                using (var command = new SqlCommand(sql, connection))
+                using (var command = new NpgsqlCommand(sql, connection))
                 {
                     command.Parameters.AddWithValue("@Username", (object?)request.Username?.ToLowerInvariant() ?? DBNull.Value);
                     command.Parameters.AddWithValue("@Email", (object?)request.Email?.ToLowerInvariant() ?? DBNull.Value);
@@ -1114,7 +1092,7 @@ namespace backend.Controllers
                     WHERE LOWER(Username) = @Username
                 ";
 
-                using (var updateCommand = new SqlCommand(updateSql, connection))
+                using (var updateCommand = new NpgsqlCommand(updateSql, connection))
                 {
                     updateCommand.Parameters.AddWithValue("@Password", newHash);
                     updateCommand.Parameters.AddWithValue("@Salt", newSalt);
@@ -1163,7 +1141,7 @@ namespace backend.Controllers
                 : "User";
         }
 
-        private static string? ReadNullableString(SqlDataReader reader, int ordinal)
+        private static string? ReadNullableString(NpgsqlDataReader reader, int ordinal)
         {
             if (reader.IsDBNull(ordinal))
             {
@@ -1179,7 +1157,7 @@ namespace backend.Controllers
             };
         }
 
-        private static string ReadStringOrEmpty(SqlDataReader reader, int ordinal)
+        private static string ReadStringOrEmpty(NpgsqlDataReader reader, int ordinal)
         {
             return ReadNullableString(reader, ordinal) ?? string.Empty;
         }
@@ -1378,7 +1356,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
         }
 
         private async Task<(Guid sessionId, DateTime createdAt, DateTime lastSeen)> CreateSessionAsync(
-            SqlConnection connection,
+            NpgsqlConnection connection,
             string username,
             string? email)
         {
@@ -1394,7 +1372,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
                     (@SessionId, @Username, @Email, @CreatedAt, @LastSeen, @IpAddress, @UserAgent)
             ";
 
-            using var command = new SqlCommand(sql, connection);
+            using var command = new NpgsqlCommand(sql, connection);
             command.Parameters.AddWithValue("@SessionId", sessionId);
             command.Parameters.AddWithValue("@Username", username);
             command.Parameters.AddWithValue("@Email", (object?)email ?? DBNull.Value);
@@ -1407,7 +1385,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
             return (sessionId, now, now);
         }
 
-        private async Task<bool> RefreshSessionAsync(SqlConnection connection, Guid sessionId)
+        private async Task<bool> RefreshSessionAsync(NpgsqlConnection connection, Guid sessionId)
         {
             const string sql = @"
                 UPDATE login_sessions
@@ -1416,14 +1394,14 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
                   AND RevokedAt IS NULL
             ";
 
-            using var command = new SqlCommand(sql, connection);
+            using var command = new NpgsqlCommand(sql, connection);
             command.Parameters.AddWithValue("@SessionId", sessionId);
             command.Parameters.AddWithValue("@LastSeen", DateTime.UtcNow);
             var rows = await command.ExecuteNonQueryAsync();
             return rows > 0;
         }
 
-        private async Task RevokeSessionAsync(SqlConnection connection, Guid sessionId)
+        private async Task RevokeSessionAsync(NpgsqlConnection connection, Guid sessionId)
         {
             const string sql = @"
                 UPDATE login_sessions
@@ -1432,13 +1410,13 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
                   AND RevokedAt IS NULL
             ";
 
-            using var command = new SqlCommand(sql, connection);
+            using var command = new NpgsqlCommand(sql, connection);
             command.Parameters.AddWithValue("@SessionId", sessionId);
             command.Parameters.AddWithValue("@RevokedAt", DateTime.UtcNow);
             await command.ExecuteNonQueryAsync();
         }
 
-        private async Task<Dictionary<string, DateTime>> GetLatestSessionActivityAsync(SqlConnection connection)
+        private async Task<Dictionary<string, DateTime>> GetLatestSessionActivityAsync(NpgsqlConnection connection)
         {
             const string sql = @"
                 SELECT LOWER(Username) AS Username, MAX(LastSeen) AS LastSeen
@@ -1447,7 +1425,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
                 GROUP BY LOWER(Username)
             ";
 
-            using var command = new SqlCommand(sql, connection);
+            using var command = new NpgsqlCommand(sql, connection);
             using var reader = await command.ExecuteReaderAsync();
             var result = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
 
@@ -1496,7 +1474,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
         }
 
         private async Task<string?> ValidateColumnLengthAsync(
-            SqlConnection connection,
+            NpgsqlConnection connection,
             string columnName,
             string? value,
             string displayName)
@@ -1531,24 +1509,24 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
             return null;
         }
 
-        private async Task<string?> GetColumnDataTypeAsync(SqlConnection connection, string columnName)
+        private async Task<string?> GetColumnDataTypeAsync(NpgsqlConnection connection, string columnName)
         {
             var (dataType, _) = await GetColumnInfoAsync(connection, columnName);
             return dataType;
         }
 
         private async Task<(string? dataType, int? maxLength)> GetColumnInfoAsync(
-            SqlConnection connection,
+            NpgsqlConnection connection,
             string columnName)
         {
             const string sql = @"
                 SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_NAME = 'login_certification'
-                  AND COLUMN_NAME = @ColumnName
+                  AND LOWER(COLUMN_NAME) = LOWER(@ColumnName)
             ";
 
-            using var command = new SqlCommand(sql, connection);
+            using var command = new NpgsqlCommand(sql, connection);
             command.Parameters.AddWithValue("@ColumnName", columnName);
             using var reader = await command.ExecuteReaderAsync();
             if (!await reader.ReadAsync())
@@ -1568,35 +1546,29 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
 
         private static bool IsBinaryColumnType(string? dataType)
         {
-            return string.Equals(dataType, "varbinary", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "binary", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "image", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(dataType, "bytea", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsCharacterColumnType(string? dataType)
         {
-            return string.Equals(dataType, "varchar", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "nvarchar", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "char", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "nchar", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "text", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "ntext", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(dataType, "character varying", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dataType, "character", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dataType, "text", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsBitColumnType(string? dataType)
         {
-            return string.Equals(dataType, "bit", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(dataType, "boolean", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsNumericColumnType(string? dataType)
         {
-            return string.Equals(dataType, "int", StringComparison.OrdinalIgnoreCase)
+            return string.Equals(dataType, "integer", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(dataType, "smallint", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(dataType, "tinyint", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(dataType, "bigint", StringComparison.OrdinalIgnoreCase);
         }
 
-        private async Task AddImageParameterAsync(SqlCommand command, SqlConnection connection, string parameterName, string? image)
+        private async Task AddImageParameterAsync(NpgsqlCommand command, NpgsqlConnection connection, string parameterName, string? image)
         {
             if (image == null)
             {
@@ -1608,7 +1580,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
             if (IsBinaryColumnType(dataType))
             {
                 var bytes = Encoding.UTF8.GetBytes(image);
-                var parameter = command.Parameters.Add(parameterName, SqlDbType.VarBinary, -1);
+                var parameter = command.Parameters.Add(parameterName, NpgsqlDbType.Bytea, -1);
                 parameter.Value = bytes;
                 return;
             }
@@ -1616,7 +1588,7 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
             command.Parameters.AddWithValue(parameterName, image);
         }
 
-        private async Task AddTypeParameterAsync(SqlCommand command, SqlConnection connection, string parameterName, string? type)
+        private async Task AddTypeParameterAsync(NpgsqlCommand command, NpgsqlConnection connection, string parameterName, string? type)
         {
             if (type == null)
             {
@@ -1629,14 +1601,14 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
 
             if (IsBitColumnType(dataType))
             {
-                var parameter = command.Parameters.Add(parameterName, SqlDbType.Bit);
+                var parameter = command.Parameters.Add(parameterName, NpgsqlDbType.Boolean);
                 parameter.Value = string.Equals(normalizedType, "Admin", StringComparison.OrdinalIgnoreCase);
                 return;
             }
 
             if (IsNumericColumnType(dataType))
             {
-                var parameter = command.Parameters.Add(parameterName, SqlDbType.Int);
+                var parameter = command.Parameters.Add(parameterName, NpgsqlDbType.Integer);
                 parameter.Value = string.Equals(normalizedType, "Admin", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
                 return;
             }
@@ -1667,8 +1639,15 @@ Se voce nao solicitou esta alteracao, ignore este e-mail.";
 
             using var pbkdf2 = new Rfc2898DeriveBytes(password, saltBytes[..saltLength].ToArray(), 100_000, HashAlgorithmName.SHA256);
             var hashBytes = pbkdf2.GetBytes(32);
-            var computed = Convert.ToBase64String(hashBytes);
-            return computed == hashBase64;
+
+            Span<byte> expectedHash = stackalloc byte[32];
+            if (!Convert.TryFromBase64String(hashBase64, expectedHash, out var hashLength) ||
+                hashLength != expectedHash.Length)
+            {
+                return false;
+            }
+
+            return CryptographicOperations.FixedTimeEquals(hashBytes, expectedHash);
         }
     }
 }

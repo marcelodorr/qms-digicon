@@ -18,6 +18,14 @@ export default defineConfig({
       },
     ],
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5100',
+        changeOrigin: true,
+      },
+    },
+  },
   build: {
     outDir: path.resolve(__dirname, '../backend/wwwroot'),
     emptyOutDir: true,

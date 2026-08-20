@@ -5,10 +5,12 @@ using backend.Data;
 using backend.Services;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting.WindowsServices;
+using Npgsql;
+
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,11 +44,25 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "A connection string 'ConnectionStrings:DefaultConnection' não foi configurada.");
+    }
+
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+        npgsqlOptions.EnableRetryOnFailure());
     options.AddInterceptors(sp.GetRequiredService<DbCommandErrorInterceptor>());
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+}
 
 app.UseExceptionHandler(appBuilder =>
 {
@@ -81,11 +97,12 @@ app.UseExceptionHandler(appBuilder =>
 
         problem.Extensions["traceId"] = traceId;
 
-        if (root is SqlException sqlException)
+        if (root is PostgresException postgresException)
         {
-            problem.Extensions["sqlNumber"] = sqlException.Number;
-            problem.Extensions["sqlLineNumber"] = sqlException.LineNumber;
-            problem.Extensions["sqlProcedure"] = sqlException.Procedure;
+            problem.Extensions["sqlState"] = postgresException.SqlState;
+            problem.Extensions["tableName"] = postgresException.TableName;
+            problem.Extensions["constraintName"] = postgresException.ConstraintName;
+            problem.Extensions["position"] = postgresException.Position;
         }
 
         if (app.Environment.IsDevelopment())

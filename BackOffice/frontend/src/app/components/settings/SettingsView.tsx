@@ -50,6 +50,7 @@ export function SettingsView({ user }: SettingsViewProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [activeTab, setActiveTab] = useState('profile');
   const [dbServer, setDbServer] = useState('');
+  const [dbPort, setDbPort] = useState('5432');
   const [dbName, setDbName] = useState('');
   const [dbUser, setDbUser] = useState('');
   const [dbPassword, setDbPassword] = useState('');
@@ -110,6 +111,7 @@ export function SettingsView({ user }: SettingsViewProps) {
     try {
       const config = await fetchDbConfig();
       setDbServer(config.server ?? '');
+      setDbPort(String(config.port ?? 5432));
       setDbName(config.database ?? '');
       setDbUser(config.user ?? '');
       setDbPassword(config.password ?? '');
@@ -238,7 +240,8 @@ export function SettingsView({ user }: SettingsViewProps) {
   };
 
   const handleSaveDatabase = async () => {
-    if (!dbServer || !dbName || !dbUser || !dbPassword) {
+    const port = Number(dbPort);
+    if (!dbServer || !dbName || !dbUser || !dbPassword || !Number.isInteger(port) || port <= 0 || port > 65535) {
       toast.error("Preencha todos os campos de conexão.");
       return;
     }
@@ -247,6 +250,7 @@ export function SettingsView({ user }: SettingsViewProps) {
     try {
       await updateDbConfig({
         server: dbServer,
+        port,
         database: dbName,
         user: dbUser,
         password: dbPassword,
@@ -628,9 +632,22 @@ export function SettingsView({ user }: SettingsViewProps) {
                         <Label htmlFor="db-server">Servidor</Label>
                         <Input
                           id="db-server"
-                          placeholder="localhost"
+                          placeholder="postgres.exemplo.com"
                           value={dbServer}
                           onChange={(event) => setDbServer(event.target.value)}
+                          disabled={isDbLoading || isDbSaving || isReadOnly}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="db-port">Porta</Label>
+                        <Input
+                          id="db-port"
+                          type="number"
+                          min="1"
+                          max="65535"
+                          placeholder="5432"
+                          value={dbPort}
+                          onChange={(event) => setDbPort(event.target.value)}
                           disabled={isDbLoading || isDbSaving || isReadOnly}
                         />
                       </div>
@@ -638,7 +655,7 @@ export function SettingsView({ user }: SettingsViewProps) {
                         <Label htmlFor="db-name">Banco de Dados</Label>
                         <Input
                           id="db-name"
-                          placeholder="digicon_db"
+                          placeholder="dbqms"
                           value={dbName}
                           onChange={(event) => setDbName(event.target.value)}
                           disabled={isDbLoading || isDbSaving || isReadOnly}
@@ -648,7 +665,7 @@ export function SettingsView({ user }: SettingsViewProps) {
                         <Label htmlFor="db-user">Usuário</Label>
                         <Input
                           id="db-user"
-                          placeholder="root"
+                          placeholder="admin"
                           value={dbUser}
                           onChange={(event) => setDbUser(event.target.value)}
                           disabled={isDbLoading || isDbSaving || isReadOnly}

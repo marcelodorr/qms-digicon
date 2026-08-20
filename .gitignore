@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# .NET
+BackOffice/backend/bin/
+BackOffice/backend/obj/
+BackOffice/backend/.config/
+
+# Node / Vite
+BackOffice/frontend/node_modules/
+BackOffice/frontend/dist/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example

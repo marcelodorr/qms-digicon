@@ -26,6 +26,10 @@ namespace backend.Data
         public DbSet<SpecialProcessHistoryModel> SpecialProcessHistory { get; set; }
         public DbSet<ShippingLabelModel> ShippingLabels { get; set; }
         public DbSet<ShippingLabelPrintSettingsModel> ShippingLabelPrintSettings { get; set; }
+        public DbSet<LoginCertificationModel> LoginCertifications { get; set; }
+        public DbSet<LoginSessionModel> LoginSessions { get; set; }
+        public DbSet<LoginModulePermissionModel> LoginModulePermissions { get; set; }
+        public DbSet<LoginPasswordResetModel> LoginPasswordResets { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -34,7 +38,7 @@ namespace backend.Data
             modelBuilder.Entity<PurchaseOrderModel>()
                 .HasIndex(p => new { p.PONumber, p.Item, p.ClienteId })
                 .IsUnique()
-                .HasFilter("[IsDeleted] = 0");
+                .HasFilter("\"IsDeleted\" = FALSE");
 
             modelBuilder.Entity<AnalystCertificateModel>()
                 .HasOne(c => c.Analyst)
@@ -44,7 +48,9 @@ namespace backend.Data
             modelBuilder.Entity<AnalystCertificateModel>()
                 .HasIndex(c => new { c.Certificate, c.IsDefault })
                 .IsUnique()
-                .HasFilter("[IsDeleted] = 0 AND [IsDefault] = 1");
+                .HasFilter("\"IsDeleted\" = FALSE AND \"IsDefault\" = TRUE");
+
+            ConfigureLoginTables(modelBuilder);
 
             modelBuilder.Entity<RncModel>()
                 .HasNoKey()
@@ -171,6 +177,55 @@ namespace backend.Data
             modelBuilder.Entity<ShippingLabelPrintSettingsModel>()
                 .Property(s => s.BadgeStrokeWidthMm)
                 .HasPrecision(10, 2);
+        }
+
+        private static void ConfigureLoginTables(ModelBuilder modelBuilder)
+        {
+            var certifications = modelBuilder.Entity<LoginCertificationModel>();
+            certifications.ToTable("login_certification");
+            certifications.HasKey(x => x.Username);
+            certifications.Property(x => x.Username).HasColumnName("username");
+            certifications.Property(x => x.Email).HasColumnName("email");
+            certifications.Property(x => x.Password).HasColumnName("password");
+            certifications.Property(x => x.Salt).HasColumnName("salt");
+            certifications.Property(x => x.Type).HasColumnName("type");
+            certifications.Property(x => x.Image).HasColumnName("image");
+            certifications.HasIndex(x => x.Email).IsUnique();
+
+            var sessions = modelBuilder.Entity<LoginSessionModel>();
+            sessions.ToTable("login_sessions");
+            sessions.Property(x => x.SessionId).HasColumnName("sessionid");
+            sessions.Property(x => x.Username).HasColumnName("username");
+            sessions.Property(x => x.Email).HasColumnName("email");
+            sessions.Property(x => x.CreatedAt).HasColumnName("createdat");
+            sessions.Property(x => x.LastSeen).HasColumnName("lastseen");
+            sessions.Property(x => x.RevokedAt).HasColumnName("revokedat");
+            sessions.Property(x => x.IpAddress).HasColumnName("ipaddress");
+            sessions.Property(x => x.UserAgent).HasColumnName("useragent");
+            sessions.HasIndex(x => x.Username);
+            sessions.HasIndex(x => x.LastSeen);
+
+            var permissions = modelBuilder.Entity<LoginModulePermissionModel>();
+            permissions.ToTable("login_module_permissions");
+            permissions.HasKey(x => new { x.Username, x.ModuleKey });
+            permissions.Property(x => x.Username).HasColumnName("username");
+            permissions.Property(x => x.ModuleKey).HasColumnName("modulekey");
+            permissions.Property(x => x.CanView).HasColumnName("canview").HasDefaultValue(true);
+            permissions.Property(x => x.CanEdit).HasColumnName("canedit").HasDefaultValue(false);
+            permissions.Property(x => x.UpdatedAt).HasColumnName("updatedat");
+            permissions.HasIndex(x => x.Username);
+
+            var passwordResets = modelBuilder.Entity<LoginPasswordResetModel>();
+            passwordResets.ToTable("login_password_resets");
+            passwordResets.Property(x => x.Id).HasColumnName("id");
+            passwordResets.Property(x => x.TokenHash).HasColumnName("tokenhash");
+            passwordResets.Property(x => x.Username).HasColumnName("username");
+            passwordResets.Property(x => x.Email).HasColumnName("email");
+            passwordResets.Property(x => x.CreatedAt).HasColumnName("createdat");
+            passwordResets.Property(x => x.ExpiresAt).HasColumnName("expiresat");
+            passwordResets.Property(x => x.UsedAt).HasColumnName("usedat");
+            passwordResets.HasIndex(x => x.TokenHash).IsUnique();
+            passwordResets.HasIndex(x => new { x.Username, x.Email });
         }
     }
 }

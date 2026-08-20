@@ -1,4 +1,3 @@
-using Microsoft.Data.SqlClient;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -6,6 +5,7 @@ using backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 
 namespace backend.Controllers
 {
@@ -36,10 +36,11 @@ namespace backend.Controllers
             {
                 if (!string.IsNullOrWhiteSpace(connection))
                 {
-                    var builder = new SqlConnectionStringBuilder(connection);
-                    response.Server = builder.DataSource;
-                    response.Database = builder.InitialCatalog;
-                    response.User = builder.UserID;
+                    var builder = new NpgsqlConnectionStringBuilder(connection);
+                    response.Server = builder.Host;
+                    response.Port = builder.Port;
+                    response.Database = builder.Database;
+                    response.User = builder.Username;
                     response.Password = builder.Password;
                 }
             }
@@ -65,15 +66,20 @@ namespace backend.Controllers
                 return BadRequest("Servidor, Banco, Usuário e Senha são obrigatórios.");
             }
 
-            var builder = new SqlConnectionStringBuilder
+            if (payload.Port is <= 0 or > 65535)
             {
-                DataSource = payload.Server,
-                InitialCatalog = payload.Database,
-                UserID = payload.User,
-                Password = payload.Password
+                return BadRequest("A porta deve estar entre 1 e 65535.");
+            }
+
+            var builder = new NpgsqlConnectionStringBuilder
+            {
+                Host = payload.Server,
+                Port = payload.Port ?? 5432,
+                Database = payload.Database,
+                Username = payload.User,
+                Password = payload.Password,
+                Pooling = true
             };
-            builder.Encrypt = true;
-            builder.TrustServerCertificate = true;
 
             var newConnection = builder.ConnectionString;
 
@@ -114,6 +120,7 @@ namespace backend.Controllers
             return Ok(new DbConnectionConfig
             {
                 Server = payload.Server,
+                Port = payload.Port ?? 5432,
                 Database = payload.Database,
                 User = payload.User,
                 Password = payload.Password,

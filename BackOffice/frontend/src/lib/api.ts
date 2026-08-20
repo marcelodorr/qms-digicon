@@ -1,8 +1,7 @@
-const DEFAULT_API_BASE_URL = "http://localhost:5000";
 const fallbackBaseUrl =
   typeof window !== "undefined" && import.meta.env.PROD
     ? window.location.origin
-    : DEFAULT_API_BASE_URL;
+    : "";
 const rawBaseUrl = import.meta.env.VITE_API_URL ?? fallbackBaseUrl;
 export const API_BASE_URL = rawBaseUrl.replace(/\/+$/, "");
 const AUTH_STORAGE_KEY = "digicon-qms-auth";
