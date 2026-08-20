@@ -110,7 +110,7 @@ namespace backend.Controllers
                 const string sql = @"
                     SELECT Username, Email, Password, Salt, Type, Image
                     FROM login_certification
-                    WHERE LOWER(Username) = @Identifier OR LOWER(Email) = @Identifier
+                    WHERE LOWER(Username) = @Identifier OR LOWER(Email) = @Identifier OR LOWER(Matricula) = @Identifier
                 ";
 
                 using var command = new NpgsqlCommand(sql, connection);

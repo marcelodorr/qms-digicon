@@ -12,6 +12,9 @@ namespace backend.Models
         [MaxLength(255)]
         public string Email { get; set; } = string.Empty;
 
+        [MaxLength(50)]
+        public string? Matricula { get; set; }
+
         [Required]
         [MaxLength(512)]
         public string Password { get; set; } = string.Empty;

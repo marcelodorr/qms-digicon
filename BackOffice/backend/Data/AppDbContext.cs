@@ -186,11 +186,13 @@ namespace backend.Data
             certifications.HasKey(x => x.Username);
             certifications.Property(x => x.Username).HasColumnName("username");
             certifications.Property(x => x.Email).HasColumnName("email");
+            certifications.Property(x => x.Matricula).HasColumnName("matricula");
             certifications.Property(x => x.Password).HasColumnName("password");
             certifications.Property(x => x.Salt).HasColumnName("salt");
             certifications.Property(x => x.Type).HasColumnName("type");
             certifications.Property(x => x.Image).HasColumnName("image");
             certifications.HasIndex(x => x.Email).IsUnique();
+            certifications.HasIndex(x => x.Matricula).IsUnique().HasFilter("\"matricula\" IS NOT NULL");
 
             var sessions = modelBuilder.Entity<LoginSessionModel>();
             sessions.ToTable("login_sessions");
