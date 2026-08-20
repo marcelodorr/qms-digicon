@@ -27,11 +27,12 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
 RUN useradd --create-home --shell /bin/bash appuser \
-    && mkdir -p /home/appuser/Documents \
-    && chown -R appuser:appuser /home/appuser /app
+    && mkdir -p /home/appuser/Documents /app-data \
+    && chown -R appuser:appuser /home/appuser /app /app-data
 
 COPY --from=backend-build /app/publish .
-RUN chown -R appuser:appuser /app
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chown -R appuser:appuser /app && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER appuser
 ENV HOME=/home/appuser
@@ -39,4 +40,8 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "backend.dll"]
+# appsettings.json is rewritten at runtime by the app itself (Settings screens
+# for SMTP/DB), so /app-data is mounted as a persistent volume and
+# appsettings.json is symlinked into it to survive redeploys.
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["dotnet", "backend.dll"]

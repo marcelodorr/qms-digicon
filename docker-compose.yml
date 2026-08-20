@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: ${ConnectionStrings__DefaultConnection}
+    ports:
+      - "8080"
+    volumes:
+      - qms_appsettings:/app-data
+      - qms_documents:/home/appuser/Documents
+    restart: unless-stopped
+
+volumes:
+  qms_appsettings:
+  qms_documents:

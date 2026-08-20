@@ -4,7 +4,8 @@ O sistema é publicado como **um único container**: o build do frontend
 (Vite) é copiado para `wwwroot` e servido pelo próprio backend ASP.NET Core,
 exatamente como já funciona hoje em desenvolvimento/produção local. O
 `Dockerfile` na raiz faz esse build em 3 estágios (frontend → backend →
-runtime) e não precisa de nenhuma outra configuração de rede.
+runtime) e o `docker-compose.yml` na raiz é o que o Dokploy usa para subir o
+serviço.
 
 ## 1. Pré-requisitos
 
@@ -13,55 +14,59 @@ runtime) e não precisa de nenhuma outra configuração de rede.
 
 ## 2. Criar a aplicação no Dokploy
 
-1. Novo serviço do tipo **Application**, origem = este repositório Git.
-2. Build type: **Dockerfile** (usa o `Dockerfile` da raiz do repo).
-3. Porta interna do container: **8080** (já configurada via `ASPNETCORE_URLS`
-   no Dockerfile). Configure o domínio/proxy do Dokploy apontando para essa
-   porta.
+1. Novo serviço do tipo **Compose**, origem = este repositório Git.
+2. Compose Path: `docker-compose.yml` (raiz do repo). O Dokploy detecta o
+   `build:` do serviço `app` e builda a imagem a partir do `Dockerfile`.
+3. Configure o domínio/proxy do Dokploy apontando para a porta **8080** do
+   container (já publicada pelo `docker-compose.yml`).
 
 ## 3. Variáveis de ambiente
 
-Configure em "Environment" do serviço (veja `.env.example`):
+Configure em "Environment" do serviço no Dokploy (veja `.env.example`) — o
+`docker-compose.yml` repassa essas variáveis para o container:
 
 | Variável | Valor |
 |---|---|
 | `ConnectionStrings__DefaultConnection` | `Host=...;Port=5432;Database=dbqms;Username=...;Password=...` |
-| `ASPNETCORE_ENVIRONMENT` | `Production` |
 
 Ao subir, o backend aplica automaticamente as migrations pendentes no banco
 (`dotnet ef database update` embutido no `Program.cs`) e, em um banco novo,
 cria o usuário administrador inicial. Troque a senha padrão após o primeiro
 acesso.
 
-## 4. Volumes persistentes (obrigatório)
+## 4. Volumes persistentes (já declarados no compose)
 
-O sistema grava dados em disco além do banco. Sem volumes, esses dados somem
-a cada redeploy/restart do container:
+O sistema grava dados em disco além do banco. O `docker-compose.yml` já
+declara dois volumes nomeados para que esses dados sobrevivam a
+redeploys/restarts — não é preciso configurar nada a mais no Dokploy:
 
-| Volume no Dokploy | Path no container | Para quê |
+| Volume | Path no container | Para quê |
 |---|---|---|
-| `qms-appsettings` | `/app/appsettings.json` | As telas de **Configurações → SMTP** e **Configurações → Banco de Dados** gravam direto nesse arquivo em runtime. Sem volume, qualquer configuração feita pela UI é perdida no próximo deploy. |
-| `qms-documents` | `/home/appuser/Documents` | PDFs de certificados de qualidade, certificados de conformidade e certificados de processo especial gerados pelo sistema são salvos aqui por padrão. |
+| `qms_appsettings` | `/app-data` (symlinkado para `/app/appsettings.json` pelo entrypoint) | As telas de **Configurações → SMTP** e **Configurações → Banco de Dados** gravam direto em `appsettings.json` em runtime. Sem volume, qualquer configuração feita pela UI é perdida no próximo deploy. |
+| `qms_documents` | `/home/appuser/Documents` | PDFs de certificados de qualidade, certificados de conformidade e certificados de processo especial gerados pelo sistema são salvos aqui por padrão. |
 
-Mapeie ambos como *volume mounts* (não *bind mounts* do host, a menos que
-você gerencie o path manualmente na VPS).
-
-Na primeira subida, se o volume de `appsettings.json` estiver vazio, o
-arquivo da imagem (sem segredos) é usado como ponto de partida — configure
-SMTP e, se preferir usar a UI em vez da variável de ambiente, a conexão de
-banco pela tela de Configurações; a gravação subsequente já vai para o
-volume.
+Um volume nomeado não pode ser montado direto em cima de um arquivo único
+que já existe na imagem (o Docker exige que seja um diretório), por isso o
+volume é montado em `/app-data` e o `docker-entrypoint.sh` cria um symlink
+`/app/appsettings.json -> /app-data/appsettings.json` a cada boot. Na
+primeira subida, se `/app-data` estiver vazio, ele é semeado com o
+`appsettings.json` da imagem (sem segredos); em subidas seguintes, o que a
+UI gravou é preservado.
 
 ## 5. O que já foi validado localmente
 
-- `docker build -t qms-digicon .` a partir da raiz do repo builda com
-  sucesso (frontend Vite + backend .NET 8 publish).
+- `docker compose build` e `docker compose up` a partir da raiz do repo
+  funcionam de ponta a ponta (frontend Vite + backend .NET 8 publish).
 - O container sobe, lê `ConnectionStrings__DefaultConnection` da env var e
   tenta aplicar as migrations — testado com credenciais inválidas de
   propósito, retornando erro claro do Postgres (`role ... does not exist`),
   confirmando que a leitura da variável e a tentativa de conexão funcionam
   como esperado. Com uma connection string válida, a migration é aplicada
   normalmente.
+- Testado especificamente o ciclo de vida do volume `qms_appsettings`:
+  primeira subida semeia o arquivo, uma escrita simulada (como a tela de
+  Configurações faria) persiste, e ao recriar o container reutilizando o
+  mesmo volume (simulando um redeploy) a edição continua lá.
 
 ## 6. Segurança
 
