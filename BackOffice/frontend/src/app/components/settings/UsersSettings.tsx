@@ -56,6 +56,7 @@ export function UsersSettings({ canEdit = true }: UsersSettingsProps) {
     fullName: '',
     username: '',
     email: '',
+    matricula: '',
     type: 'User',
   });
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
@@ -147,6 +148,7 @@ export function UsersSettings({ canEdit = true }: UsersSettingsProps) {
         fullName: '',
         username: '',
         email: '',
+        matricula: '',
         type: 'User',
         password: '',
       });
@@ -171,6 +173,7 @@ export function UsersSettings({ canEdit = true }: UsersSettingsProps) {
           fullName: currentUser.fullName || currentUser.username,
           username: currentUser.username,
           email: currentUser.email,
+          matricula: currentUser.matricula || null,
           type: currentUser.type || 'User',
         });
         setUsers(prev => prev.map(u => u.id === currentUser.id ? updated : u));
@@ -184,6 +187,7 @@ export function UsersSettings({ canEdit = true }: UsersSettingsProps) {
           fullName: currentUser.fullName || currentUser.username,
           username: currentUser.username,
           email: currentUser.email,
+          matricula: currentUser.matricula || null,
           password: currentUser.password,
           type: currentUser.type || 'User',
         });
@@ -315,6 +319,12 @@ export function UsersSettings({ canEdit = true }: UsersSettingsProps) {
         headerName: 'Usuário',
         flex: 1,
         minWidth: 160,
+      },
+      {
+        field: 'matricula',
+        headerName: 'Matrícula',
+        width: 130,
+        valueGetter: (value) => value || '—',
       },
       {
         field: 'email',
@@ -452,12 +462,21 @@ export function UsersSettings({ canEdit = true }: UsersSettingsProps) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">E-mail</Label>
-                <Input 
-                  id="email" 
+                <Input
+                  id="email"
                   type="email"
-                  value={currentUser.email} 
+                  value={currentUser.email}
                   onChange={(e) => setCurrentUser({...currentUser, email: e.target.value})}
-                  placeholder="Ex: joao@empresa.com" 
+                  placeholder="Ex: joao@empresa.com"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="matricula">Matrícula</Label>
+                <Input
+                  id="matricula"
+                  value={currentUser.matricula || ''}
+                  onChange={(e) => setCurrentUser({...currentUser, matricula: e.target.value})}
+                  placeholder="Ex: 12345"
                 />
               </div>
               <div className="grid gap-2">

@@ -48,7 +48,7 @@ namespace backend.Controllers
                 var now = DateTime.UtcNow;
 
                 const string sql = @"
-                    SELECT Username, Email, Type, Image
+                    SELECT Username, Email, Matricula, Type, Image
                     FROM login_certification
                     ORDER BY Username
                 ";
@@ -61,8 +61,9 @@ namespace backend.Controllers
                 {
                     var username = ReadStringOrEmpty(reader, 0);
                     var email = ReadStringOrEmpty(reader, 1);
-                    var type = NormalizeUserType(reader.GetValue(2));
-                    var image = ReadNullableString(reader, 3);
+                    var matricula = ReadNullableString(reader, 2);
+                    var type = NormalizeUserType(reader.GetValue(3));
+                    var image = ReadNullableString(reader, 4);
                     DateTime? lastSeen = null;
                     if (!string.IsNullOrWhiteSpace(username) &&
                         lastSeenByUser.TryGetValue(username.ToLowerInvariant(), out var lastSeenValue))
@@ -76,6 +77,7 @@ namespace backend.Controllers
                         fullName = username,
                         username,
                         email,
+                        matricula,
                         type = NormalizeUserType(type),
                         image,
                         lastSeen,
@@ -180,6 +182,7 @@ namespace backend.Controllers
         {
             var username = request?.Username?.Trim();
             var email = request?.Email?.Trim();
+            var matricula = string.IsNullOrWhiteSpace(request?.Matricula) ? null : request!.Matricula!.Trim();
             var password = request?.Password;
             var type = NormalizeUserType(request?.Type);
             var image = request?.Image;
@@ -196,21 +199,24 @@ namespace backend.Controllers
                 using var connection = CreateConnection();
                 await connection.OpenAsync();
                 var emailNormalized = email.ToLowerInvariant();
+                var matriculaNormalized = matricula?.ToLowerInvariant();
 
                 const string checkSql = @"
                     SELECT COUNT(*)
                     FROM login_certification
                     WHERE LOWER(Username) = @Username OR LOWER(Email) = @Email
+                       OR (@Matricula IS NOT NULL AND LOWER(Matricula) = @Matricula)
                 ";
 
                 using (var checkCommand = new NpgsqlCommand(checkSql, connection))
                 {
                     checkCommand.Parameters.AddWithValue("@Username", username.ToLowerInvariant());
                     checkCommand.Parameters.AddWithValue("@Email", emailNormalized);
+                    checkCommand.Parameters.AddWithValue("@Matricula", (object?)matriculaNormalized ?? DBNull.Value);
                     var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                     if (exists > 0)
                     {
-                        return Conflict(new { message = "Usuário ou email já existente." });
+                        return Conflict(new { message = "Usuário, email ou matrícula já existente." });
                     }
                 }
 
@@ -226,6 +232,12 @@ namespace backend.Controllers
                     return BadRequest(new { message = lengthError });
                 }
 
+                lengthError = await ValidateColumnLengthAsync(connection, "Matricula", matricula, "Matrícula");
+                if (lengthError != null)
+                {
+                    return BadRequest(new { message = lengthError });
+                }
+
                 lengthError = await ValidateColumnLengthAsync(connection, "Image", image, "Imagem");
                 if (lengthError != null)
                 {
@@ -235,14 +247,15 @@ namespace backend.Controllers
                 var (hash, salt) = HashPassword(password);
 
                 const string insertSql = @"
-                    INSERT INTO login_certification (Username, Email, Password, Salt, Type, Image)
-                    VALUES (@Username, @Email, @Password, @Salt, @Type, @Image)
+                    INSERT INTO login_certification (Username, Email, Matricula, Password, Salt, Type, Image)
+                    VALUES (@Username, @Email, @Matricula, @Password, @Salt, @Type, @Image)
                 ";
 
                 using (var insertCommand = new NpgsqlCommand(insertSql, connection))
                 {
                     insertCommand.Parameters.AddWithValue("@Username", username);
                     insertCommand.Parameters.AddWithValue("@Email", emailNormalized);
+                    insertCommand.Parameters.AddWithValue("@Matricula", (object?)matricula ?? DBNull.Value);
                     insertCommand.Parameters.AddWithValue("@Password", hash);
                     insertCommand.Parameters.AddWithValue("@Salt", salt);
                     await AddTypeParameterAsync(insertCommand, connection, "@Type", type);
@@ -260,6 +273,7 @@ namespace backend.Controllers
                         fullName = username,
                         username,
                         email,
+                        matricula,
                         type,
                         image
                     }
@@ -275,6 +289,7 @@ namespace backend.Controllers
         {
             public string? Username { get; set; }
             public string? Email { get; set; }
+            public string? Matricula { get; set; }
             public string? Type { get; set; }
             public string? Image { get; set; }
         }
@@ -291,6 +306,7 @@ namespace backend.Controllers
         {
             var newUsername = request?.Username?.Trim();
             var newEmail = request?.Email?.Trim();
+            var newMatricula = string.IsNullOrWhiteSpace(request?.Matricula) ? null : request!.Matricula!.Trim();
             var rawType = request?.Type;
             var type = rawType == null ? null : NormalizeUserType(rawType);
             var image = request?.Image;
@@ -305,11 +321,13 @@ namespace backend.Controllers
                 using var connection = CreateConnection();
                 await connection.OpenAsync();
                 var newEmailNormalized = newEmail.ToLowerInvariant();
+                var newMatriculaNormalized = newMatricula?.ToLowerInvariant();
 
                 const string checkSql = @"
                     SELECT COUNT(*)
                     FROM login_certification
-                    WHERE (LOWER(Username) = @NewUsername OR LOWER(Email) = @NewEmail)
+                    WHERE (LOWER(Username) = @NewUsername OR LOWER(Email) = @NewEmail
+                        OR (@NewMatricula IS NOT NULL AND LOWER(Matricula) = @NewMatricula))
                       AND LOWER(Username) <> @CurrentUsername
                 ";
 
@@ -317,11 +335,12 @@ namespace backend.Controllers
                 {
                     checkCommand.Parameters.AddWithValue("@NewUsername", newUsername.ToLowerInvariant());
                     checkCommand.Parameters.AddWithValue("@NewEmail", newEmailNormalized);
+                    checkCommand.Parameters.AddWithValue("@NewMatricula", (object?)newMatriculaNormalized ?? DBNull.Value);
                     checkCommand.Parameters.AddWithValue("@CurrentUsername", username.ToLowerInvariant());
                     var exists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
                     if (exists > 0)
                     {
-                        return Conflict(new { message = "Usuário ou email já existente." });
+                        return Conflict(new { message = "Usuário, email ou matrícula já existente." });
                     }
                 }
 
@@ -337,6 +356,12 @@ namespace backend.Controllers
                     return BadRequest(new { message = lengthError });
                 }
 
+                lengthError = await ValidateColumnLengthAsync(connection, "Matricula", newMatricula, "Matrícula");
+                if (lengthError != null)
+                {
+                    return BadRequest(new { message = lengthError });
+                }
+
                 lengthError = await ValidateColumnLengthAsync(connection, "Image", image, "Imagem");
                 if (lengthError != null)
                 {
@@ -347,6 +372,7 @@ namespace backend.Controllers
                     UPDATE login_certification
                     SET Username = @NewUsername,
                         Email = @NewEmail,
+                        Matricula = @NewMatricula,
                         Type = COALESCE(@Type, Type),
                         Image = COALESCE(@Image, Image)
                     WHERE LOWER(Username) = @CurrentUsername
@@ -356,6 +382,7 @@ namespace backend.Controllers
                 {
                     updateCommand.Parameters.AddWithValue("@NewUsername", newUsername);
                     updateCommand.Parameters.AddWithValue("@NewEmail", newEmailNormalized);
+                    updateCommand.Parameters.AddWithValue("@NewMatricula", (object?)newMatricula ?? DBNull.Value);
                     await AddTypeParameterAsync(updateCommand, connection, "@Type", type);
                     await AddImageParameterAsync(updateCommand, connection, "@Image", image);
                     updateCommand.Parameters.AddWithValue("@CurrentUsername", username.ToLowerInvariant());
@@ -390,6 +417,7 @@ namespace backend.Controllers
                         fullName = newUsername,
                         username = newUsername,
                         email = newEmail,
+                        matricula = newMatricula,
                         type = type ?? "User",
                         image
                     }

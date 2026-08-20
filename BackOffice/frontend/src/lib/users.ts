@@ -5,6 +5,7 @@ export type UserAccount = {
   fullName: string;
   username: string;
   email: string;
+  matricula?: string | null;
   type: "User" | "Admin";
   image?: string | null;
   lastSeen?: string | null;
@@ -21,6 +22,7 @@ type UserApiModel = {
   fullName?: string;
   username?: string;
   email?: string;
+  matricula?: string | null;
   type?: "User" | "Admin";
   image?: string | null;
   lastSeen?: string | null;
@@ -61,6 +63,7 @@ function mapUserFromApi(payload: UserApiModel): UserAccount {
     fullName: payload.fullName || username,
     username,
     email,
+    matricula: payload.matricula ?? null,
     type,
     image: payload.image ?? null,
     lastSeen: payload.lastSeen ?? null,
@@ -97,6 +100,7 @@ export async function createUser(payload: {
   fullName: string;
   username: string;
   email: string;
+  matricula?: string | null;
   password: string;
   type: "User" | "Admin";
   image?: string | null;
@@ -106,6 +110,7 @@ export async function createUser(payload: {
     body: JSON.stringify({
       Username: payload.username,
       Email: payload.email,
+      Matricula: payload.matricula || null,
       Password: payload.password,
       Type: payload.type,
       Image: payload.image ?? null,
@@ -123,6 +128,7 @@ export async function updateUser(id: string, payload: {
   fullName: string;
   username: string;
   email: string;
+  matricula?: string | null;
   type: "User" | "Admin";
   image?: string | null;
 }) {
@@ -131,6 +137,7 @@ export async function updateUser(id: string, payload: {
     body: JSON.stringify({
       Username: payload.username,
       Email: payload.email,
+      Matricula: payload.matricula || null,
       Type: payload.type,
       Image: payload.image ?? null,
     }),
